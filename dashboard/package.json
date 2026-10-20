@@ -1,0 +1,11 @@
+{
+  "name": "atlas-maps-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test ../web/static/js/exports.test.mjs test/proxy.test.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

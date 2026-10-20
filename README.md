@@ -1,5 +1,7 @@
 # Google Maps Scraper
 
+**This fork includes Atlas, a new responsive search dashboard with CSV, Excel, JSON, TSV and GeoJSON exports.** See [dashboard setup and Vercel deployment](dashboard/README.md).
+
 <p align="center">
   <a href="https://github.com/gosom/google-maps-scraper/stargazers"><img src="https://img.shields.io/github/stars/gosom/google-maps-scraper?style=social" alt="GitHub Stars"></a>
   <a href="https://github.com/gosom/google-maps-scraper/network/members"><img src="https://img.shields.io/github/forks/gosom/google-maps-scraper?style=social" alt="GitHub Forks"></a>
