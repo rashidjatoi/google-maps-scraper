@@ -1,4 +1,4 @@
-import { get, put } from '@vercel/blob';
+import { get, put, BlobPreconditionFailedError } from '@vercel/blob';
 const INDEX='atlas/workspace.json';
 // Conditional writes keep independent API invocations from losing queued jobs.
 export function createStore(adapter){
@@ -8,7 +8,7 @@ export function createStore(adapter){
    const {data,etag}=await readIndex();const value=await change(data);
    if(value?.unchanged)return value.result;
    try{await adapter.put(INDEX,JSON.stringify(data),{access:'private',addRandomSuffix:false,allowOverwrite:Boolean(etag),ifMatch:etag||undefined,contentType:'application/json',cacheControlMaxAge:60});return value;}
-   catch(error){if(!['BlobPreconditionFailedError','BlobAlreadyExistsError'].includes(error.name)||attempt===5)throw error;}
+   catch(error){if(!(error instanceof BlobPreconditionFailedError || ['BlobPreconditionFailedError','BlobAlreadyExistsError'].includes(error.name) || String(error.message).toLowerCase().includes('already exists'))||attempt===5)throw error;}
   }
  }
  return{readIndex,updateIndex};

@@ -1,9 +1,10 @@
 import test from 'node:test';import assert from 'node:assert/strict';
+import {BlobPreconditionFailedError} from '@vercel/blob';
 import {createStore,cleanJob} from '../lib/store.mjs';import {parseSettings} from '../lib/cloud-jobs.mjs';
 test('concurrent queue updates retry conditional writes without losing jobs',async()=>{
  let content=null,version=0,conflicts=0;
  const storage=createStore({get:async()=>content===null?null:{stream:new Blob([content]).stream(),blob:{etag:String(version)}},put:async(path,value,options)=>{
-  if(content!==null&&options.ifMatch!==String(version)){conflicts++;const e=Error();e.name='BlobPreconditionFailedError';throw e;}
+  if(content!==null&&options.ifMatch!==String(version)){conflicts++;throw new BlobPreconditionFailedError();}
   content=value;version++;
  }});
  await Promise.all(['first','second','third'].map(ID=>storage.updateIndex(data=>{data.jobs.push({ID});return ID;})));
