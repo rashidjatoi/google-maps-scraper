@@ -1,59 +1,65 @@
-# Atlas maps workspace
+# Atlas — Google Maps workspace
 
-A complete frontend for the existing Google Maps Scraper API. Search batches of queries, configure language, coordinates, depth, email extraction and extended reviews, follow job statuses, duplicate jobs, inspect searchable/paginated results, and export selected columns as CSV, native XLSX, JSON, TSV or GeoJSON.
+This fork includes an all-Vercel backend: Vercel Functions provide the authenticated job API, a Vercel Daemon runs the real Google Maps scraper in a container, and private Vercel Blob stores jobs and result files. No separate VPS is required. Daemons and Services are Vercel beta features; see their current account limits before use.
 
-The scraper does not require AI. Its optional AI-agent skill orchestrates searches; the actual scraping uses browser automation.
+## Vercel project setup
 
-## Vercel deployment
+Import `rashidjatoi/google-maps-scraper`, with the project Root Directory set to the repository root (leave it empty), not `dashboard`. The root `vercel.json` defines the dashboard service and scraper daemon. The shared UI is also embedded in native Go builds.
 
-Import `rashidjatoi/google-maps-scraper` into Vercel and choose **dashboard** as the Root Directory. Enable **Include source files outside of the Root Directory in the Build Step**: the build copies the same frontend files embedded by the Go server from `../web/static`. Framework preset: Other. Build: `npm run build`. Output: `dist`. No frontend dependencies are needed.
+Create a **private Vercel Blob store** in the same project and connect it to Production. Set:
 
-Set server-side environment variables in Vercel:
+- `ATLAS_BACKEND=vercel`
+- `ATLAS_APP_URL=https://your-production-domain.vercel.app`
+- `ATLAS_WORKER_SECRET`: a unique random worker credential, stored as a Vercel secret.
+- `DASHBOARD_PASSWORD`: a long, unique workspace password, stored as a Vercel secret.
+- `BLOB_READ_WRITE_TOKEN`: supplied by the Blob store connection.
 
-- `SCRAPER_API_URL`: HTTPS origin of a persistent scraper server, e.g. `https://scraper.example.com`. No `/api/v1` suffix.
-- `DASHBOARD_PASSWORD`: a long, unique workspace password. Required when connecting the backend. Authentication uses a signed HttpOnly, Secure, SameSite cookie lasting 12 hours. This is a single shared workspace, not a multi-user account system.
-- `SCRAPER_API_TOKEN`: optional bearer token required by your backend's reverse proxy. The upstream Go web API itself has no bearer-auth feature. Configure authentication at the reverse proxy before exposing it.
+Keep all credentials server-side. Production environment variables are shared with the dashboard service and daemon. The session uses an HttpOnly, Secure, SameSite cookie and expires after 12 hours. This is one private shared workspace, not a multi-user account system.
 
-Do not put credentials in public frontend variables or commit `.env` files. Vercel rebuilds from GitHub when changes reach the production branch. Environment changes require redeployment. Keep deployment protection or an access gateway enabled if stronger workspace controls are needed.
+The daemon runs in Production only. Preview deployments do not have their own worker. Do not connect untrusted preview code to the production Blob store or worker secrets.
 
-The frontend shows an explicit setup/connection error until a real backend is configured. It never ships sample business records or simulated search results.
+## How searches work
 
-## Persistent scraper backend
+1. The authenticated API validates a batch of 1–10 queries and stores a pending job in private Blob.
+2. One daemon checks for jobs about once a minute and claims the oldest queued search using a conditional write.
+3. The daemon runs the real scraper with Chromium, one concurrent browser, and the chosen settings. Email extraction and extended reviews are supported.
+4. A lease and heartbeat prevent deployment rollouts from processing the same job concurrently. Interrupted searches retry up to three times.
+5. Results upload directly from the worker to private Blob. Only authenticated dashboard downloads can read them.
 
-Vercel only hosts the UI and short API requests. Google Maps scraping runs on a separate persistent host with Chromium, durable disk, and adequate memory. Use the repository Dockerfile to build your fork on that host:
+A search may take several minutes. The worker enforces the requested time limit; timed-out searches are marked failed and may have partial results. The workspace holds up to 200 jobs and 10 queued/running searches. Delete finished searches to free space.
 
-```sh
-docker build -t atlas-scraper .
-docker run -d --name atlas-scraper --restart unless-stopped \
-  -p 127.0.0.1:8080:8080 \
-  -v atlas-data:/gmapsdata \
-  -e DISABLE_TELEMETRY=1 \
-  atlas-scraper -data-folder /gmapsdata
-```
+The pinned scraper image comes from the upstream project. UI changes deploy from this fork. To change the scraping engine itself, rebuild an image from your modified Go source and update the worker Dockerfile's image reference.
 
-Place an authenticated HTTPS reverse proxy in front of `127.0.0.1:8080`. Keep its token server-side in Vercel. Do not expose the unauthenticated upstream service directly on a public port. The existing SaaS edition has separate API-key authentication and a different API contract; this dashboard targets the standard web runner's `/api/v1/jobs` API.
+## Quotas and storage
 
-The native Go server also serves this frontend at `/`; rebuild the binary or Docker image after frontend changes. Native Go mode retains its existing access model and does not use the Vercel password endpoint; keep it private behind your gateway.
+On Vercel Hobby, the Daemons beta has a shared monthly Active CPU quota. Exhausting it stops workers until the quota resets; waiting for work uses no Active CPU. Blob and Function quotas also apply. Avoid repeatedly queuing large searches. Jobs and CSV data survive worker restarts because they are stored in private Blob, not the worker's temporary disk.
 
-## Local verification
+Large result downloads remain subject to Vercel Function response limits and browser memory. For very large datasets, add authenticated presigned downloads or use the optional external backend mode below. Do not imply a job with no result file completed successfully; failures remain visible in the UI.
+
+## Local checks
 
 ```sh
 cd dashboard
+npm ci
 npm test
 npm run build
 ```
 
-Node 20+ is required for these dependency-free tests/builds. To run the real scraper, follow the root README's Go or Docker instructions. The repository's Go toolchain version is defined by `go.mod`.
+The tests cover exports, session authentication, path restrictions, input validation, secret redaction, and concurrent durable-queue updates. To validate the worker image:
 
-## Exports and limits
+```sh
+docker build -t atlas-worker workers/scraper
+docker run --rm --entrypoint node atlas-worker --version
+```
 
-All exports use the downloaded CSV as the source of truth and run in the browser. Every matching row across all pages is exported, with only the selected fields. CSV/TSV protect spreadsheet applications against formula injection; XLSX uses explicit text cells to preserve phone numbers and identifiers. JSON preserves original field strings. GeoJSON excludes rows with missing or invalid coordinates, and keeps valid zero coordinates. Export selection does not change which fields the backend collects.
+Running the worker locally against the production queue consumes real searches. Use a separate store, test endpoint and secrets for development.
 
-Large results consume browser memory. Vercel's function response-size and execution limits can also limit very large proxied CSV downloads; for datasets beyond those limits use the native backend's authenticated download path or add object-storage delivery. Searches themselves keep running on the persistent backend.
+## Optional external backend
 
-## Verification performed
+Set `ATLAS_BACKEND` to a value other than `vercel` and configure `SCRAPER_API_URL` with the HTTPS origin of a standard Go web-runner server. `SCRAPER_API_TOKEN` optionally authenticates to a reverse proxy in front of it. The standard upstream API has no built-in bearer authentication; do not expose it publicly without access controls. Remove or disable the daemon when using an external backend.
 
-- Export tests cover quoted CSV, Unicode, multiline fields, formula protection, field selection, valid GeoJSON and native XLSX structure.
-- Proxy tests cover path restrictions, missing configuration, session authentication, credential forwarding and cross-origin rejection.
-- Browser fixture tests cover job creation, result viewing, pagination, email filters and export selection. Fixtures are development-only and are not deployed.
-- Live Google Maps scraping requires the separately deployed backend and is not represented by fixture testing.
+## Downloads
+
+The UI exports selected fields from every matching row across all pages as CSV, native XLSX, JSON, TSV and GeoJSON. CSV/TSV neutralize spreadsheet formulas; XLSX uses text cells to preserve identifiers and phone numbers. JSON preserves source field strings. GeoJSON excludes rows without valid coordinates.
+
+The actual scraper does not require AI or an AI API key. The upstream optional AI-agent skill helps plan and operate searches; data collection uses browser automation.

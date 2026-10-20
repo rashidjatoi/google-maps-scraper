@@ -20,10 +20,12 @@ async function request(url,options={}) {
 async function refreshJobs() {
   $('refresh').disabled=true;
   try {
-    const data=await (await request('/api/v1/jobs')).json();
+    const response=await request('/api/v1/jobs');
+    const workerStatus=response.headers.get('X-Atlas-Worker-Status');
+    const data=await response.json();
     if (data!==null && !Array.isArray(data)) throw new Error('The server returned an unexpected jobs response.');
     state.jobs=(data||[]).sort((a,b)=>new Date(b.Date)-new Date(a.Date)); state.connected=true;
-    $('connection').textContent='Scraper connected'; $('connection').className='connection online'; showError('error-banner',''); renderJobs();
+    $('connection').textContent=workerStatus==='unavailable'?'Worker not connected':'Scraper connected'; $('connection').className=workerStatus==='unavailable'?'connection':'connection online'; showError('error-banner',''); renderJobs();
   } catch(error) {
     state.connected=false; $('connection').textContent='Connection unavailable'; $('connection').className='connection';
     showError('error-banner',`Cannot reach your scraper. ${error.message} Your form has been kept.`);
@@ -42,7 +44,7 @@ function renderJobs() {
   }
   $('jobs').innerHTML=filtered.map(job=>{
     const known=Object.hasOwn(statusLabels,job.Status)?job.Status:'pending';
-    return `<article class="job-card"><div class="job-top"><div><h3 class="job-title">${escapeHTML(job.Name)}</h3><div class="job-query">${escapeHTML((job.Data?.keywords||[]).join(' · '))}</div></div><span class="status ${known}">${statusLabels[job.Status]||'Unknown'}</span></div><div class="job-bottom"><span class="job-meta">${escapeHTML(new Date(job.Date).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}))} · ${job.Data?.keywords?.length||0} queries${job.Data?.email?' · Email search':''}</span><div class="job-actions"><button class="secondary" data-action="view" data-id="${escapeHTML(job.ID)}" ${['pending','working'].includes(job.Status)?'disabled':''}>${job.Status==='failed'?'Check results':'View results'} ↗</button><button class="icon-button" data-action="duplicate" data-id="${escapeHTML(job.ID)}" aria-label="Duplicate ${escapeHTML(job.Name)}">⧉</button><button class="icon-button" data-action="delete" data-id="${escapeHTML(job.ID)}" aria-label="Delete ${escapeHTML(job.Name)}" ${['pending','working'].includes(job.Status)?'disabled':''}>×</button></div></div></article>`;
+    return `<article class="job-card"><div class="job-top"><div><h3 class="job-title">${escapeHTML(job.Name)}</h3><div class="job-query">${escapeHTML(job.Error|| (job.Data?.keywords||[]).join(' · '))}</div></div><span class="status ${known}">${statusLabels[job.Status]||'Unknown'}</span></div><div class="job-bottom"><span class="job-meta">${escapeHTML(new Date(job.Date).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}))} · ${job.Data?.keywords?.length||0} queries${job.Data?.email?' · Email search':''}</span><div class="job-actions"><button class="secondary" data-action="view" data-id="${escapeHTML(job.ID)}" ${['pending','working'].includes(job.Status)?'disabled':''}>${job.Status==='failed'?'Check results':'View results'} ↗</button><button class="icon-button" data-action="duplicate" data-id="${escapeHTML(job.ID)}" aria-label="Duplicate ${escapeHTML(job.Name)}">⧉</button><button class="icon-button" data-action="delete" data-id="${escapeHTML(job.ID)}" aria-label="Delete ${escapeHTML(job.Name)}" ${['pending','working'].includes(job.Status)?'disabled':''}>×</button></div></div></article>`;
   }).join('');
 }
 $('search-form').addEventListener('submit',async event=>{

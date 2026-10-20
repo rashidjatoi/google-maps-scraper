@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test ../web/static/js/exports.test.mjs test/proxy.test.mjs"
+    "test": "node --test ../web/static/js/exports.test.mjs test/*.test.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@vercel/blob": "2.8.2"
+  }
 }

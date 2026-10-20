@@ -1,4 +1,5 @@
 import { authenticated } from './session.mjs';
+import cloudJobs from '../lib/cloud-jobs.mjs';
 const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
 const item = new RegExp(`^jobs/${UUID}$`);
 const download = new RegExp(`^jobs/${UUID}/download$`);
@@ -13,6 +14,14 @@ export default async function handler(req, res) {
     return res.status(200).send('<!doctype html><html lang="en"><meta charset="utf-8"><title>Atlas API</title><h1>Atlas job API</h1><p>Same-origin API proxy connected to your scraper server.</p><ul><li>GET /api/v1/jobs — list searches</li><li>POST /api/v1/jobs — create search</li><li>GET /api/v1/jobs/{id} — search details</li><li>DELETE /api/v1/jobs/{id} — delete search</li><li>GET /api/v1/jobs/{id}/download — results as CSV</li></ul><p>CSV, Excel, JSON, TSV, and GeoJSON exports are generated locally by the dashboard.</p><a href="/">Back to dashboard</a></html>');
   }
   if (!allowed(path, req.method)) return json(res, 405, 'This API route or method is not supported.');
+  if (process.env.ATLAS_BACKEND === 'vercel') {
+    if (!process.env.DASHBOARD_PASSWORD) return json(res,503,'Set a workspace password to enable searches.');
+    if (!authenticated(req)) return json(res,401,'Sign in to your workspace to continue.');
+    if (['POST','DELETE'].includes(req.method) && req.headers.origin) {
+      try {if(new URL(req.headers.origin).host!==req.headers.host)return json(res,403,'Cross-origin requests are not allowed.');}catch{return json(res,403,'Invalid request origin.');}
+    }
+    return cloudJobs(req,res,path);
+  }
   if (!process.env.SCRAPER_API_URL) return json(res, 503, 'Backend not configured. Add SCRAPER_API_URL in Vercel project settings and redeploy.');
   if (!process.env.DASHBOARD_PASSWORD) return json(res,503,'Set DASHBOARD_PASSWORD in Vercel to protect your workspace before using the scraper.');
   if (!authenticated(req)) return json(res,401,'Sign in to your workspace to continue.');

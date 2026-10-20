@@ -1,0 +1,74 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "dashboard": {
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist",
+      "functions": {
+        "api/scraper.mjs": {
+          "maxDuration": 30
+        },
+        "api/worker.mjs": {
+          "maxDuration": 30
+        }
+      },
+      "rewrites": [
+        {
+          "source": "/api/v1/:path*",
+          "destination": "/api/scraper?path=:path*"
+        },
+        {
+          "source": "/api/docs",
+          "destination": "/api/scraper?path=docs"
+        }
+      ],
+      "root": "dashboard"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "dashboard"
+      }
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' fonts.googleapis.com; font-src 'self' fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+        }
+      ]
+    }
+  ],
+  "daemons": {
+    "scraper": {
+      "root": "workers/scraper",
+      "entrypoint": "Dockerfile",
+      "instances": {
+        "iad1": 1
+      },
+      "resources": {
+        "requests": {
+          "memory": "2Gi"
+        }
+      },
+      "terminationGracePeriodSeconds": 45
+    }
+  }
+}
