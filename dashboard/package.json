@@ -11,6 +11,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@vercel/blob": "2.8.2"
+    "@vercel/blob": "2.8.2",
+    "express": "5.3.0"
   }
 }

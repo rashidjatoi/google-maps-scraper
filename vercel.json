@@ -2,27 +2,15 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "services": {
     "dashboard": {
+      "root": "dashboard",
+      "framework": "express",
+      "entrypoint": "server.mjs",
       "buildCommand": "npm run build",
-      "outputDirectory": "dist",
       "functions": {
-        "api/scraper.mjs": {
-          "maxDuration": 30
-        },
-        "api/worker.mjs": {
+        "server.mjs": {
           "maxDuration": 30
         }
-      },
-      "rewrites": [
-        {
-          "source": "/api/v1/:path*",
-          "destination": "/api/scraper?path=:path*"
-        },
-        {
-          "source": "/api/docs",
-          "destination": "/api/scraper?path=docs"
-        }
-      ],
-      "root": "dashboard"
+      }
     }
   },
   "rewrites": [
